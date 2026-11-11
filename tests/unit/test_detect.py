@@ -29,7 +29,7 @@ def test_spec_declares_protocol_11_with_valid_schemas(invoke: Invoke) -> None:
     for name in ("configSchema", "outputSchema"):
         Draft202012Validator.check_schema(run.result[name])
     config = run.result["configSchema"]
-    assert set(config["required"]) == {"kind", "acts"}
+    assert set(config["required"]) == {"acts"}
     assert config["properties"]["kind"]["enum"] == ["normattiva", "gu"]
     assert config["properties"]["acts"]["minItems"] == 1
     assert config["properties"]["acts"]["maxItems"] == 50
@@ -153,7 +153,9 @@ def test_state_keeps_only_the_newest_200_keys(invoke: Invoke) -> None:
         ("normattiva", None),
         ("normattiva", {"denominazione": "LEGGE"}),
         ("other", [LEGGE]),
-        (None, [LEGGE]),
+        (None, [LEGGE, GU1]),
+        (None, [{"foo": 1}]),
+        (None, "LEGGE"),
     ],
 )
 def test_invalid_config_is_rejected_with_config_error_for_run_and_check(invoke: Invoke, kind: Any, acts: Any) -> None:
@@ -227,7 +229,7 @@ def test_manifest_declares_the_v11_actions_the_mandatory_execute_and_no_hosts() 
     for name in ("spec", "check", "run", "execute"):
         assert manifest["actions"][name]["input"]["type"] == "object"
         assert manifest["actions"][name]["output"]["type"] == "object"
-    assert manifest["actions"]["run"]["input"]["required"] == ["kind", "acts"]
+    assert manifest["actions"]["run"]["input"]["required"] == ["acts"]
 
 
 def test_the_package_conformance_fixture_is_valid_input_for_the_class(invoke: Invoke) -> None:
@@ -238,3 +240,29 @@ def test_the_package_conformance_fixture_is_valid_input_for_the_class(invoke: In
 
     assert invoke("check", **config["check"]).result == {"ok": True}
     assert len(invoke("run", **config["run"]).result["items"]) >= config["expect"]["minItems"] >= 1
+
+
+# --- kind inferred from the act shape (the Host has no Source-type template; the two Source types differ only in the acts) ---
+
+
+def test_kind_is_inferred_as_gu_from_the_act_shape_when_the_step_does_not_pass_it(invoke: Invoke) -> None:
+    run = invoke("run", acts=[GU1, GU2], state=None)
+
+    assert keys(run) == ["gu:26G00178|v1", "gu:000G0265|v1"]
+    assert {item["meta"]["kind"] for item in run.result["items"]} == {"gu"}
+
+
+def test_kind_is_inferred_as_normattiva_from_the_act_shape(invoke: Invoke) -> None:
+    run = invoke("run", acts=[LEGGE, DL], state=None)
+
+    assert {item["meta"]["kind"] for item in run.result["items"]} == {"normattiva"}
+
+
+def test_check_infers_the_kind_too(invoke: Invoke) -> None:
+    assert invoke("check", acts=[GU1]).result == {"ok": True}
+
+
+def test_an_explicit_kind_wins_over_the_inference(invoke: Invoke) -> None:
+    run = invoke("run", kind="gu", acts=[LEGGE], state=None)
+
+    assert run.error["code"] == "config_error"

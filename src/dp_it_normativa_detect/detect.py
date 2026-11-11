@@ -60,6 +60,23 @@ def validate_kind(kind: Any) -> str:
     return str(kind)
 
 
+def _shape(act: Any) -> str | None:
+    if not isinstance(act, dict):
+        return None
+    return "gu" if "codiceRedazionale" in act else "normattiva" if "denominazione" in act else None
+
+
+def resolve_kind(kind: Any, acts: Any) -> str:
+    """The explicit kind, else inferred from the act shape (the Host has no Source-type template to pass it)."""
+    if kind is not None:
+        return validate_kind(kind)
+    shapes = {_shape(act) for act in acts} if isinstance(acts, list) else set()
+    if len(shapes) != 1 or None in shapes:
+        msg = "kind is not given and cannot be inferred: acts must be all {denominazione, anno, numero} or all {dataGU, codiceRedazionale}"
+        raise _config_error(msg)
+    return str(shapes.pop())
+
+
 def validate_acts(kind: str, acts: Any) -> list[dict[str, Any]]:
     """Returns the acts or raises config_error; runs before anything else."""
     if not isinstance(acts, list) or not acts:
@@ -190,9 +207,9 @@ ACT_SCHEMAS: list[dict[str, Any]] = [
 CONFIG_SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "required": ["kind", "acts"],
+    "required": ["acts"],
     "properties": {
-        "kind": {"enum": list(KINDS), "description": "normattiva (denominazione/anno/numero) or gu (dataGU/codiceRedazionale)"},
+        "kind": {"enum": list(KINDS), "description": "optional (inferred from the acts): normattiva or gu"},
         "acts": {"type": "array", "minItems": 1, "maxItems": MAX_ACTS, "items": {"anyOf": ACT_SCHEMAS}},
         "refreshToken": {"type": ["string", "null"], "description": "change it to fetch every act again"},
         "state": {"type": ["object", "null"], "properties": {"seen": {"type": "array", "items": {"type": "string"}}}},

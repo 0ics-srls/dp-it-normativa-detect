@@ -19,7 +19,7 @@ def handle(action: str, params: dict[str, Any]) -> dict[str, Any]:
     """Runs one v1.1 action and returns result.data; raises DetectError."""
     if action == "spec":
         return v11.spec_result(detect.CONFIG_SCHEMA, detect.OUTPUT_SCHEMA)
-    kind = detect.validate_kind(params.get("kind"))
+    kind = detect.resolve_kind(params.get("kind"), params.get("acts"))
     acts = detect.validate_acts(kind, params.get("acts"))
     if action == "check":
         return {"ok": True}
